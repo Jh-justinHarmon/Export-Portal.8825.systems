@@ -1,0 +1,62 @@
+The screenshot is telling us one precise thing:
+
+Worker is wired correctly, but your portal still does not have /api/jobs/pending, so every poll returns 404 Not Found.
+
+Everything else (gateway URL, portal URL, secrets) is fine.
+
+What needs to exist in Portal 8825
+In the Portal 8825 server code you must actually have:
+
+ts
+// GET /api/jobs/pending
+app.get("/api/jobs/pending", async (req, res) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+    const validLimit = Math.min(Math.max(1, limit), 100);
+    const jobs = await storage.getPendingJobs(validLimit);
+    res.json({ jobs });
+  } catch (err) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+// PATCH /api/jobs/:id
+app.patch("/api/jobs/:id", async (req, res) => {
+  // validate body, call storage.updateJob(id, updates),
+  // return updated job
+});
+Two common problems:
+
+Using api.jobs.pending.path but that constant is not /api/jobs/pending.
+getPendingJobs / PATCH route not implemented at all.
+Fast way to fix using the Replit agent (Portal app)
+In the Portal 8825 Repl, ask its AI:
+
+text
+In server/routes.ts, replace any usage of api.jobs.pending.path and api.jobs.update.path with literal strings:
+ 
+- GET "/api/jobs/pending"
+- PATCH "/api/jobs/:id"
+ 
+Also, implement storage.getPendingJobs(limit: number) in server/storage.ts to select from exportJobs where status = "pending".
+ 
+Show me the full updated code for:
+- storage.getPendingJobs
+- the GET /api/jobs/pending route
+- the PATCH /api/jobs/:id route
+Let it apply the changes.
+
+Verify the endpoint really exists
+From your machine (or Replit Shell), hit the portal directly:
+
+bash
+curl -s https://8825-export-portal.replit.app/api/jobs/pending | head
+If you still see 404 Not Found → routes not wired correctly.
+If you see { "jobs": [...] } → portal side is good.
+Once curl works:
+
+Restart the worker (python worker.py in Worker Repl).
+Submit an export from the portal UI.
+Watch worker logs for Processing job job_... then ✅.
+The only remaining blocker is getting those two routes live with the exact paths shown above.
+
+Feedback submitted

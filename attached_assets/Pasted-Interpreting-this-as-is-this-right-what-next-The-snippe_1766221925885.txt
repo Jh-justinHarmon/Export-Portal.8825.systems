@@ -1,0 +1,80 @@
+Interpreting this as “is this right / what next?”.
+
+The snippet you pasted is the right shape for GET /api/jobs/pending:
+
+ts
+// GET /api/jobs/pending - Fetch pending jobs for the worker
+app.get(api.jobs.pending.path, async (req, res) => {
+  try {
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+    const validLimit = Math.min(Math.max(1, limit), 100);
+    const jobs = await storage.getPendingJobs(validLimit);
+    res.json({ jobs });
+  } catch (err) {
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+For this to actually work end‑to‑end, you need three things in the portal:
+
+api.jobs.pending.path must be /api/jobs/pending.
+(Your worker is calling exactly that.)
+storage.getPendingJobs(limit) must exist and filter by status = 'pending'.
+In server/storage.ts, you need something like:
+ts
+async getPendingJobs(limit: number): Promise<ExportJob[]> {
+  return await db
+    .select()
+    .from(exportJobs)
+    .where(eq(exportJobs.status, "pending"))
+    .limit(limit);
+}
+PATCH /api/jobs/:id route still needs to be implemented.
+Your snippet ends with the comment:
+ts
+// PATCH /api/jobs/:id - Update job status (for worker)
+That handler is what the worker will call after it processes a job.
+Next concrete step (Portal prompt)
+In the Portal 8825 Repl, ask its agent to finish the PATCH route and getPendingJobs implementation. Use:
+
+text
+We have started adding job management endpoints in server/routes.ts.
+ 
+Right now we have:
+ 
+- GET /api/jobs/pending calling storage.getPendingJobs(limit)
+- A comment for PATCH /api/jobs/:id but no implementation yet
+- DatabaseStorage in server/storage.ts without getPendingJobs implemented
+ 
+Please:
+ 
+1) Implement storage.getPendingJobs(limit: number): Promise<ExportJob[]> in server/storage.ts:
+   - It should select from exportJobs where status = "pending"
+   - It should respect the limit parameter.
+ 
+2) Implement PATCH /api/jobs/:id in server/routes.ts:
+   - Route: app.patch(api.jobs.update.path, async (req, res) => { ... })
+     where api.jobs.update.path resolves to "/api/jobs/:id"
+   - Body is a partial update:
+     {
+       status?: "pending" | "processing" | "complete" | "failed",
+       artifactUrl?: string,
+       error?: string,
+       completedAt?: string
+     }
+   - Validate the body.
+   - Call storage.updateJob(id, updates).
+   - Return the updated job as JSON.
+ 
+Keep the style consistent with the existing /api/export route and error handling.
+Do not change /api/export.
+Show me the full code for the new getPendingJobs function and the PATCH route.
+After that:
+
+Restart the Portal app (Replit will usually hot‑reload).
+Restart the Worker (python worker.py).
+Submit an export via the portal UI.
+Watch the worker logs for:
+text
+Processing job job_...
+✅ Job job_... completed
+Once you see that, the full Export → Worker → Gateway → Appliance loop is live.
