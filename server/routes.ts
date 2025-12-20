@@ -35,6 +35,19 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/jobs/pending - Fetch pending jobs for the worker
+  // MUST be defined BEFORE /api/jobs/:id to avoid "pending" being matched as an ID
+  app.get(api.jobs.pending.path, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+      const validLimit = Math.min(Math.max(1, limit), 100);
+      const jobs = await storage.getPendingJobs(validLimit);
+      res.json({ jobs });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   app.get(api.jobs.get.path, async (req, res) => {
     try {
       const job = await storage.getJob(req.params.id);
@@ -42,18 +55,6 @@ export async function registerRoutes(
         return res.status(404).json({ message: "Job not found" });
       }
       res.json(job);
-    } catch (err) {
-      res.status(500).json({ message: "Internal server error" });
-    }
-  });
-
-  // GET /api/jobs/pending - Fetch pending jobs for the worker
-  app.get(api.jobs.pending.path, async (req, res) => {
-    try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
-      const validLimit = Math.min(Math.max(1, limit), 100);
-      const jobs = await storage.getPendingJobs(validLimit);
-      res.json({ jobs });
     } catch (err) {
       res.status(500).json({ message: "Internal server error" });
     }
