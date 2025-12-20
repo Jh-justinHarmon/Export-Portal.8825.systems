@@ -1,0 +1,513 @@
+# Maestra Design Guide & Token Summary
+
+**Version:** 2.0  
+**Last Updated:** 2025-12-20  
+**Status:** Production
+
+---
+
+## Overview
+
+Maestra is 8825's unified AI agent that delivers deep, contextual answers by leveraging the full 8825 ecosystem (Library, Brain, Memory, Infrastructure, MCP servers). It's designed to be a "premier chat experience" with synthesis-first reasoning, progressive streaming, and intelligent routing.
+
+---
+
+## Design Philosophy
+
+### Core Principles
+
+1. **Synthesis-First Reasoning**
+   - Internal structured reasoning step before user-facing answer
+   - Extracts key facts, identifies risks, recommends approach
+   - Prevents shallow one-shot answers
+
+2. **Session-Aware Context**
+   - Tracks conversation history across turns
+   - Derives session state (phase, dominant topic, constraints)
+   - Uses full conversation transcript for planning/architecture queries
+
+3. **Progressive Disclosure**
+   - Fast context first (Library, Brain, Memory) → then deeper if needed
+   - Streaming status updates during processing
+   - Progressive text display (not all-at-once)
+
+4. **Intelligent Routing**
+   - Detects planning/architecture queries → forces deep mode
+   - Escalates to high-capability models when uncertain
+   - Routes to specialized agents when appropriate
+
+---
+
+## Architecture
+
+### Data Flow
+
+```
+User Message
+    ↓
+1. Load Profile (preferences, history)
+    ↓
+2. Resolve References (from conversation history)
+    ↓
+3. Detect Sentiment (behavioral mode)
+    ↓
+4. Understand Intent (query type, goal, actions)
+    ↓
+5. Make Decisions (depth, source, action)
+    ↓
+6. Gather Context (fast → deep, session-aware)
+    ↓
+7. Synthesize (structured reasoning)
+    ↓
+8. Generate Response (LLM with optimized prompts)
+    ↓
+9. Self-Determination (auto web search if uncertain)
+    ↓
+Response to User
+```
+
+### Key Components
+
+- **DecisionMatrix**: Evaluates 3 dimensions (depth, source, action) based on intent/sentiment
+- **SessionManager**: Derives session state from conversation history
+- **SynthesisEngine**: Performs structured internal reasoning before answering
+- **Context Gathering**: Multi-source (Library, Brain, Memory, Infrastructure, Web)
+- **PromptGen Integration**: Optimizes prompts for better LLM responses
+
+---
+
+## Token Budget & Cost Model
+
+### Token Allocation by Query Type
+
+| Query Type | Depth | Context Tokens | Synthesis Tokens | Response Tokens | Total Est. | Cost (GPT-4o) |
+|------------|-------|----------------|------------------|-----------------|------------|---------------|
+| **Quick Lookup** | quick | 500 | 0 | 400 | 900 | $0.001 |
+| **Standard Query** | standard | 1500 | 800 | 1000 | 3300 | $0.005 |
+| **Planning/Architecture** | deep | 3000 | 1200 | 2000 | 6200 | $0.012 |
+| **Deep Exploration** | deep | 4000 | 1500 | 2000 | 7500 | $0.015 |
+
+### Token Distribution
+
+**Context Gathering:**
+- Library search: 200-800 tokens
+- Brain Transport: 300-500 tokens
+- Conversation transcript: 500-2000 tokens (for planning queries)
+- Infrastructure events: 100-200 tokens
+- Web search (if triggered): 1000-2000 tokens
+
+**Synthesis Step:**
+- System prompt: 400 tokens
+- Context input: 500-2000 tokens
+- Synthesis output: 300-800 tokens
+- Total: 1200-3200 tokens
+
+**Response Generation:**
+- System prompt: 200-400 tokens
+- User prompt + context: 1000-3000 tokens
+- Response output: 400-2000 tokens
+- Total: 1600-5400 tokens
+
+### Cost Optimization Strategies
+
+1. **Fast-First Context**: Quick Library/Brain search before expensive deep search
+2. **Conditional Synthesis**: Only run for queries with >100 chars of context
+3. **Smart Escalation**: Start with cheaper models, escalate only when needed
+4. **Conversation Compression**: Summarize older turns, keep recent ones full
+5. **Citation Verification**: Prevent hallucinated references (saves rework cost)
+
+---
+
+## Query Type Routing
+
+### Planning/Architecture Queries
+
+**Trigger Phrases:**
+- `how might we`
+- `how could we leverage`
+- `architecture`
+- `design`
+- `capsule`
+- `bridge`
+- `shared space`
+- `leverage this conversation`
+
+**Routing:**
+- Depth: **deep** (forced)
+- Model: Claude Sonnet or GPT-4o
+- Synthesis: Architecture-specific prompt
+- Context: Conversation transcript as primary input
+- Response Template: Problem → Architecture → Flows → Security → Next Steps
+
+**Token Budget:** 6000-7500 tokens (~$0.012-0.015)
+
+### Standard Queries
+
+**Examples:**
+- "What do we know about QuickBooks?"
+- "Show me recent TGIF updates"
+- "Explain the export pipeline"
+
+**Routing:**
+- Depth: **standard**
+- Model: GPT-4o or Claude Sonnet
+- Synthesis: Standard reasoning
+- Context: Library + Brain + Memory
+
+**Token Budget:** 3000-4000 tokens (~$0.005-0.008)
+
+### Quick Lookups
+
+**Examples:**
+- "What's the status of X?"
+- "When was Y last updated?"
+- "Who owns Z?"
+
+**Routing:**
+- Depth: **quick**
+- Model: GPT-4o-mini or Haiku
+- Synthesis: Skipped
+- Context: Fast Library search only
+
+**Token Budget:** 800-1200 tokens (~$0.001-0.002)
+
+---
+
+## UI Design Tokens
+
+### Colors
+
+```css
+/* Primary */
+--maestra-primary: #2DD4BF;        /* Teal accent */
+--maestra-primary-hover: #22B8A8;
+
+/* Background */
+--maestra-bg-dark: #0A0A0A;        /* Main background */
+--maestra-bg-card: #1A1A1A;        /* Message cards */
+--maestra-bg-input: #2A2A2A;       /* Input field */
+
+/* Text */
+--maestra-text-primary: #FFFFFF;
+--maestra-text-secondary: #888888;
+--maestra-text-muted: #555555;
+
+/* Status */
+--maestra-status-thinking: #2DD4BF;
+--maestra-status-done: #22C55E;
+--maestra-status-error: #EF4444;
+```
+
+### Typography
+
+```css
+/* Font Family */
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+/* Sizes */
+--text-xs: 0.75rem;   /* 12px - metadata */
+--text-sm: 0.875rem;  /* 14px - body text */
+--text-base: 1rem;    /* 16px - headings */
+--text-lg: 1.125rem;  /* 18px - titles */
+```
+
+### Spacing
+
+```css
+/* Consistent spacing scale */
+--space-1: 0.25rem;   /* 4px */
+--space-2: 0.5rem;    /* 8px */
+--space-3: 0.75rem;   /* 12px */
+--space-4: 1rem;      /* 16px */
+--space-6: 1.5rem;    /* 24px */
+--space-8: 2rem;      /* 32px */
+```
+
+### Components
+
+**Message Bubble:**
+- Background: `#1A1A1A`
+- Border radius: `12px`
+- Padding: `16px`
+- Max width: `100%`
+- Opacity fade-in: `0 → 1` over 200ms
+
+**Input Field:**
+- Background: `#2A2A2A`
+- Border: `1px solid #333`
+- Border radius: `24px` (pill shape)
+- Padding: `12px 20px`
+- Focus border: `#2DD4BF`
+
+**Streaming Status:**
+- Background: `rgba(45, 212, 191, 0.1)`
+- Border: `1px solid #2DD4BF`
+- Border radius: `8px`
+- Padding: `8px 12px`
+- Progress bar: `#2DD4BF` fill
+
+**Attachment Button:**
+- Size: `32px × 32px`
+- Border: `1px solid #333`
+- Border radius: `50%`
+- Hover border: `#2DD4BF`
+- Icon: Plus (12px)
+
+---
+
+## Streaming UX
+
+### Status Updates
+
+**Phases:**
+1. `load_profile` - "Loading your preferences..."
+2. `detect_sentiment` - "Understanding your request..."
+3. `understand_intent` - "Figuring out what you need..."
+4. `make_decisions` - "Planning my approach..."
+5. `gather_context_fast` - "Quick search..."
+6. `search_deep` - "Digging into knowledge base..."
+7. `search_web` - "Checking external sources..."
+8. `execute` - "Synthesizing answer..."
+9. `complete` - "Done"
+
+**Timing:**
+- Each status: 0.5-3 seconds
+- Total: 3-15 seconds depending on depth
+- Progress bar: 0% → 100% linearly
+
+### Text Streaming
+
+**Implementation:**
+- Chunk size: 50 characters
+- Delay between chunks: 50ms
+- Total effect: ~1000 chars in 1 second (smooth typewriter)
+
+**Behavior:**
+- Status visible **alongside** streaming text (not replaced)
+- "Done" only appears **after** text is complete
+- No flash of empty state
+
+---
+
+## Session State Management
+
+### Session Phases
+
+1. **Exploration** - Initial questions, broad topics
+2. **Focused** - Narrowed down to specific topic
+3. **Decision** - Evaluating options, making choices
+4. **Execution** - Taking action, implementing
+
+### Tracked Metadata
+
+```typescript
+interface SessionState {
+  session_id: string;
+  current_phase: SessionPhase;
+  turn_count: number;
+  dominant_topic: string | null;
+  topic_keywords: Record<string, number>;  // keyword → frequency
+  constraints: string[];
+  synthesis_count: number;
+  created_at: datetime;
+  updated_at: datetime;
+}
+```
+
+### Conversation History
+
+**Storage:**
+- In-memory cache per session
+- Compressed for older turns (>10 turns back)
+- Full text for recent turns (last 5-10)
+
+**Usage:**
+- Reference resolution ("that", "it", "the previous one")
+- Session state derivation (topic tracking)
+- Conversation transcript injection (for planning queries)
+
+---
+
+## Model Selection
+
+### Provider Priority
+
+1. **Anthropic Claude** (best quality)
+   - Sonnet: Deep queries, architecture, planning
+   - Haiku: Quick lookups, simple queries
+
+2. **OpenRouter GPT** (fallback)
+   - GPT-4o: Standard queries
+   - GPT-4o-mini: Quick queries
+
+3. **Mistral** (specialist routing)
+   - Code: Programming questions
+   - Math: Numeric analysis
+   - General: All-rounder
+
+4. **Ollama** (local fallback)
+   - Llama 3.1: When all else fails
+
+### Escalation Rules
+
+**Force Deep Mode:**
+- Context confidence < 0.5
+- Web search triggered
+- Planning/architecture query detected
+- User explicitly requests deep analysis
+
+**Model Upgrade:**
+- `quick` → `standard`: If initial answer is uncertain
+- `standard` → `deep`: If synthesis suggests high complexity
+- Any → Claude Sonnet: If wrong answer would be costly
+
+---
+
+## Error Handling
+
+### Graceful Degradation
+
+1. **Synthesis Fails** → Skip synthesis, proceed with standard prompts
+2. **Library Unavailable** → Use Brain Transport + Memory only
+3. **Web Search Fails** → Continue with internal context
+4. **LLM Timeout** → Retry with smaller context window
+5. **All LLMs Fail** → Return error with diagnostic info
+
+### User-Facing Errors
+
+**Format:**
+```
+Error: [Brief description]
+
+[Helpful context about what went wrong]
+
+Suggestions:
+- [Action user can take]
+- [Alternative approach]
+```
+
+**Example:**
+```
+Error: Unable to connect to Library
+
+The knowledge base is temporarily unavailable. 
+I can still answer using Brain Transport and recent memory.
+
+Suggestions:
+- Try your question again (I'll use available sources)
+- Check if the Library service is running
+```
+
+---
+
+## Performance Targets
+
+### Latency
+
+| Query Type | Target | Acceptable | Max |
+|------------|--------|------------|-----|
+| Quick | 1-2s | 3s | 5s |
+| Standard | 3-5s | 8s | 12s |
+| Deep | 8-12s | 15s | 20s |
+
+### Accuracy
+
+| Metric | Target | Acceptable |
+|--------|--------|------------|
+| Citation accuracy | 95% | 90% |
+| Context relevance | 90% | 85% |
+| Answer completeness | 85% | 80% |
+| No hallucinations | 98% | 95% |
+
+### Cost
+
+| Query Type | Target | Max |
+|------------|--------|-----|
+| Quick | $0.001 | $0.002 |
+| Standard | $0.005 | $0.010 |
+| Deep | $0.012 | $0.020 |
+
+**Monthly Budget (1000 queries):**
+- 60% Quick: $0.60
+- 30% Standard: $1.50
+- 10% Deep: $1.20
+- **Total: ~$3.30/month**
+
+---
+
+## Testing & Validation
+
+### Test Cases
+
+**1. Quick Lookup**
+- Query: "What's the status of TGIF?"
+- Expected: Fast response (<3s), Library source, brief answer
+
+**2. Standard Query**
+- Query: "Explain the export pipeline"
+- Expected: Moderate response (5-8s), multiple sources, detailed explanation
+
+**3. Planning Query (Regression Test)**
+- Query: "How might we leverage Replit to create capsule knowledge sharing?"
+- Expected: Deep response (10-15s), conversation transcript used, architecture template followed
+
+**4. Uncertain Query**
+- Query: "What are the features of [unknown external product]?"
+- Expected: Auto web search triggered, external sources cited
+
+**5. Multi-Turn Context**
+- Turn 1: "Tell me about QuickBooks"
+- Turn 2: "How does it integrate with our system?"
+- Expected: "it" resolved to QuickBooks, session context maintained
+
+### Success Criteria
+
+**Architecture Query (like Replit/capsule):**
+- ✅ Depth forced to "deep"
+- ✅ Conversation transcript injected as primary context
+- ✅ Synthesis uses architecture-specific prompt
+- ✅ Response includes: Problem → Architecture → Flows → Security → Steps
+- ✅ No generic "use existing tools" suggestions
+- ✅ Concrete, actionable design
+
+---
+
+## Future Enhancements
+
+### Phase 3: Model Palette & Routing
+- Dynamic model selection based on topic complexity
+- Cost-aware routing (cheaper models for simple queries)
+- Parallel model calls for consensus
+
+### Phase 4: Claude Critique Layer
+- Final review pass with Claude for high-stakes answers
+- Identifies blindspots, contradictions, missing context
+- Suggests improvements before delivering to user
+
+### Phase 5: Learning & Adaptation
+- Track user feedback (helpful/not helpful)
+- Learn preferred depth/verbosity per user
+- Adjust routing based on success rates
+
+---
+
+## Appendix: Key Files
+
+### Backend
+- `maestra_agent.py` - Main agent logic
+- `session_manager.py` - Session state management
+- `synthesis_engine.py` - Structured reasoning
+- `models/session.py` - Data models
+- `main.py` - FastAPI endpoints
+
+### Frontend
+- `ui/src/components/maestra/MaestraChat.jsx` - Main UI
+- `ui/src/api.js` - API client with streaming
+
+### Documentation
+- `MAESTRA_V2_BASELINE.md` - Performance baseline
+- `MAESTRA_DESIGN_GUIDE.md` - This document
+
+---
+
+**End of Design Guide**

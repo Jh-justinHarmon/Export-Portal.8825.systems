@@ -22,8 +22,7 @@ export const api = {
       path: '/api/export',
       input: z.object({
         markdown: z.string(),
-        target: z.enum(['email', 'sms', 'docx', 'pdf', 'gdoc']),
-        templateId: z.string().optional().default('generic'),
+        target: z.enum(['email', 'docx', 'pdf']),
       }),
       responses: {
         200: z.object({

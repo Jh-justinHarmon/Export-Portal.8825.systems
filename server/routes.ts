@@ -13,8 +13,10 @@ export async function registerRoutes(
     try {
       const input = api.export.create.input.parse(req.body);
       const job = await storage.createJob({
-        ...input,
-        userId: "anonymous", // TODO: Add auth
+        markdown: input.markdown,
+        target: input.target,
+        templateId: "generic",
+        userId: "anonymous",
       });
       
       res.status(200).json({ // Using 200 as per schema in shared/routes.ts which has 200 for create response (though 201 is standard, I'll stick to what I defined)
