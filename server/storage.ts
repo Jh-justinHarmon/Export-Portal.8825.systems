@@ -1,38 +1,37 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
 
-// modify the interface with any CRUD methods
-// you might need
+import { exportJobs, type ExportJob, type InsertExportJob } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  createJob(job: InsertExportJob): Promise<ExportJob>;
+  getJob(id: string): Promise<ExportJob | undefined>;
+  listJobs(limit?: number): Promise<ExportJob[]>;
+  updateJob(id: string, updates: Partial<ExportJob>): Promise<void>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
+export class DatabaseStorage implements IStorage {
+  async createJob(insertJob: InsertExportJob): Promise<ExportJob> {
+    const id = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const [job] = await db
+      .insert(exportJobs)
+      .values({ ...insertJob, id })
+      .returning();
+    return job;
   }
 
-  async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+  async getJob(id: string): Promise<ExportJob | undefined> {
+    const [job] = await db.select().from(exportJobs).where(eq(exportJobs.id, id));
+    return job;
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+  async listJobs(limit: number = 20): Promise<ExportJob[]> {
+    return await db.select().from(exportJobs).limit(limit); // Logic for sorting by created_at desc can be added if needed
   }
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+  async updateJob(id: string, updates: Partial<ExportJob>): Promise<void> {
+    await db.update(exportJobs).set(updates).where(eq(exportJobs.id, id));
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
