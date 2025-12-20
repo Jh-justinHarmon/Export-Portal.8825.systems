@@ -47,5 +47,48 @@ export async function registerRoutes(
     }
   });
 
+  // GET /api/jobs/pending - Fetch pending jobs for the worker
+  app.get(api.jobs.pending.path, async (req, res) => {
+    try {
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+      const validLimit = Math.min(Math.max(1, limit), 100);
+      const jobs = await storage.getPendingJobs(validLimit);
+      res.json({ jobs });
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // PATCH /api/jobs/:id - Update job status (for worker)
+  app.patch(api.jobs.update.path, async (req, res) => {
+    try {
+      const input = api.jobs.update.input.parse(req.body);
+      
+      // Check if job exists first
+      const existingJob = await storage.getJob(req.params.id);
+      if (!existingJob) {
+        return res.status(404).json({ message: "Job not found" });
+      }
+
+      // Build updates object, converting completedAt string to Date if provided
+      const updates: Record<string, unknown> = {};
+      if (input.status !== undefined) updates.status = input.status;
+      if (input.artifactUrl !== undefined) updates.artifactUrl = input.artifactUrl;
+      if (input.error !== undefined) updates.error = input.error;
+      if (input.completedAt !== undefined) updates.completedAt = new Date(input.completedAt);
+
+      const updatedJob = await storage.updateJob(req.params.id, updates);
+      res.json(updatedJob);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({
+          message: err.errors[0].message,
+          field: err.errors[0].path.join('.'),
+        });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
   return httpServer;
 }

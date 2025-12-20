@@ -43,6 +43,33 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    pending: {
+      method: 'GET' as const,
+      path: '/api/jobs/pending',
+      input: z.object({
+        limit: z.coerce.number().min(1).max(100).optional().default(10),
+      }).optional(),
+      responses: {
+        200: z.object({
+          jobs: z.array(z.custom<typeof exportJobs.$inferSelect>()),
+        }),
+      },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/jobs/:id',
+      input: z.object({
+        status: z.enum(['pending', 'processing', 'complete', 'failed']).optional(),
+        artifactUrl: z.string().optional(),
+        error: z.string().optional(),
+        completedAt: z.string().optional(),
+      }),
+      responses: {
+        200: z.custom<typeof exportJobs.$inferSelect>(),
+        400: errorSchemas.validation,
+        404: errorSchemas.notFound,
+      },
+    },
   },
 };
 
