@@ -1,13 +1,14 @@
 
 import { exportJobs, type ExportJob, type InsertExportJob } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 export interface IStorage {
   createJob(job: InsertExportJob): Promise<ExportJob>;
   getJob(id: string): Promise<ExportJob | undefined>;
   listJobs(limit?: number): Promise<ExportJob[]>;
-  updateJob(id: string, updates: Partial<ExportJob>): Promise<void>;
+  getPendingJobs(limit?: number): Promise<ExportJob[]>;
+  updateJob(id: string, updates: Partial<ExportJob>): Promise<ExportJob | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -26,11 +27,25 @@ export class DatabaseStorage implements IStorage {
   }
 
   async listJobs(limit: number = 20): Promise<ExportJob[]> {
-    return await db.select().from(exportJobs).limit(limit); // Logic for sorting by created_at desc can be added if needed
+    return await db.select().from(exportJobs).orderBy(desc(exportJobs.createdAt)).limit(limit);
   }
 
-  async updateJob(id: string, updates: Partial<ExportJob>): Promise<void> {
-    await db.update(exportJobs).set(updates).where(eq(exportJobs.id, id));
+  async getPendingJobs(limit: number = 10): Promise<ExportJob[]> {
+    return await db
+      .select()
+      .from(exportJobs)
+      .where(eq(exportJobs.status, "pending"))
+      .orderBy(desc(exportJobs.createdAt))
+      .limit(limit);
+  }
+
+  async updateJob(id: string, updates: Partial<ExportJob>): Promise<ExportJob | undefined> {
+    const [updated] = await db
+      .update(exportJobs)
+      .set(updates)
+      .where(eq(exportJobs.id, id))
+      .returning();
+    return updated;
   }
 }
 
